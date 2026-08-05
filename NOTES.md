@@ -50,5 +50,11 @@ snake_play_game(cfg*, seed:i64, max_ticks, result*) -> i32
 - [x] unified JS facade (js/index.mjs): bun-native -> node-native -> wasm -> mirror
 - [x] Python ctypes adapter in src/harness_snake
 - [x] repoint nano-harness at the package; drop old snake.py etc; keep 271 tests green
-- [ ] cross-language parity harness (native/wasm/mirror/ctypes/pure-python)
-- [ ] snake-view console tool + browser demo page (wasm parameter search)
+- [x] cross-language parity: JS mirror/wasm/node-native all agree (make parity); the
+  same C core driven through Python ctypes reproduces the JS WASM fixture bit-for-bit
+  (make parity-py; 30 chooseMove + 8 full playGame counters via tools/parity.py).
+  Note: the pure-Python heritage _game_move_py uses a different RNG and is NOT
+  bit-for-bit against the C core (~357/400 decisions match, rest tie-breaks); the
+  bit-for-bit anchor is the C core + JS mirror + JS/Python bindings.
+- [ ] snake-view console tool lives as a package script; browser demo page still TODO
+  (wasm parameter search animation)

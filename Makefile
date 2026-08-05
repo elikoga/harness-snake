@@ -46,6 +46,16 @@ check: native wasm
 parity: native wasm
 	$(NODE) js/parity.mjs
 
+# Python<->JS cross-language parity: the fixture is the canonical C core
+# computed through the JS WASM binding; tools/parity.py drives that SAME core
+# through ctypes and must reproduce it byte-for-byte (chooseMove + playGame).
+parity-py: native wasm
+	node js/dump-fixture.mjs
+	python3 tools/parity.py
+
+# Full matrix: JS mirror/wasm/node-native vs Python ctypes all on one core.
+parity-all: parity parity-py
+
 # Self-check of the shared library under any runtime that can link it.
 test: native
 	$(CC) $(CFLAGS) -Icsrc -o $(BUILD)/coretest test/c_core_test.c csrc/core.c
@@ -54,4 +64,4 @@ test: native
 clean:
 	rm -rf $(BUILD) build/test/test_core.c
 
-.PHONY: all native wasm check parity test clean
+.PHONY: all native wasm check parity parity-py parity-all test clean
