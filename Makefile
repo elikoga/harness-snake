@@ -64,4 +64,9 @@ test: native
 clean:
 	rm -rf $(BUILD) build/test/test_core.c
 
-.PHONY: all native wasm check parity parity-py parity-all test clean
+# Serve the browser demo locally (Node/build assets reachable from repo root):
+#   make demo   -> http://127.0.0.1:8765/demo/index.html
+demo:
+	python3 -m http.server 8765
+
+.PHONY: all native wasm check parity parity-py parity-all demo test clean

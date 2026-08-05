@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>snakecore — wasm parameter search</title>
+<style>
+  body { background:#0e1116; color:#c9d4e0; font-family: ui-monospace, Menlo, Consolas, monospace;
+         display:flex; flex-direction:column; align-items:center; gap:16px; padding:24px; }
+  h1 { font-size:20px; margin:0; letter-spacing:1px; }
+  h1 code { color:#4cf25a; }
+  .controls { display:flex; gap:10px; align-items:center; }
+  label { color:#8fa3b8; }
+  input, button { background:#16212c; color:#dfeaf5; border:1px solid #2a3a4a; border-radius:6px;
+                  font: inherit; padding:6px 10px; }
+  button { cursor:pointer; border-color:#4cf25a; color:#4cf25a; }
+  button:hover { background:#1c2f24; }
+  #info { min-height:1.2em; color:#8fa3b8; }
+  canvas { border:1px solid #2a3a4a; border-radius:8px; }
+</style>
+</head>
+<body>
+  <h1>snakecore · <code>wasm parameter search</code></h1>
+  <div class="controls">
+    <label for="seed">seed</label>
+    <input id="seed" type="number" value="1" min="1">
+    <button id="play">Play</button>
+  </div>
+  <div id="info">Pick a seed and press Play.</div>
+  <canvas id="board"></canvas>
+  <p style="max-width:640px;font-size:12px;color:#6b8098;line-height:1.5">
+    One C engine (csrc/core.c) plays an expectimax parameter search (node budget,
+    deterministic food RNG). The same core is compiled to WASM (<code>build/snakecore.wasm</code>
+    — its result is logged to the console) and this page animates <code>js/mirror.mjs</code>'s
+    <code>playGameTrace</code>, which is bit-for-bit identical to that core across every backend.
+  </p>
+  <script type="module" src="./main.mjs"></script>
+</body>
+</html>

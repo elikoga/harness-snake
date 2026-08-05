@@ -56,5 +56,8 @@ snake_play_game(cfg*, seed:i64, max_ticks, result*) -> i32
   Note: the pure-Python heritage _game_move_py uses a different RNG and is NOT
   bit-for-bit against the C core (~357/400 decisions match, rest tie-breaks); the
   bit-for-bit anchor is the C core + JS mirror + JS/Python bindings.
-- [ ] snake-view console tool lives as a package script; browser demo page still TODO
-  (wasm parameter search animation)
+- [x] snake-view console tool ships as the package script (harness_snake.viewer:main).
+- [x] browser demo (demo/index.html + demo/main.mjs): loads the real build/snakecore.wasm
+  (C core) and logs its result, animates js/mirror.mjs playGameTrace (bit-for-bit identical)
+  on a canvas. Run `make demo` then open /demo/index.html. playGameTrace returns per-tick
+  moves/food/bodies/summary for animation (node-budget parameter search path).

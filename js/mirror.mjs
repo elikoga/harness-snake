@@ -405,6 +405,94 @@ export function playGame(cfg, gameSeed, maxTicks = 1_000_000) {
   return { ticks: tick, foods, length: st.len, maxlen, dead, filled };
 }
 
+// Like playGame but returns the full deterministic per-tick trace so a viewer
+// can animate the game: same loop, same RNG, same summary -- bit-for-bit the
+// C core (mirror == core). Adds `moves` ({x,y} heading, depth omitted), the
+// `foodTrace` (food cell before each decision, -1 when invalid) and `lenTrace`.
+export function playGameTrace(cfg, gameSeed, maxTicks = 1_000_000) {
+  const w = cfg.width, h = cfg.height;
+  if (w <= 0 || h <= 0 || w * h > MAX_CELLS) return null;
+  let initial = cfg.initialLength <= 0 ? 1 : cfg.initialLength;
+  if (initial > MAX_CELLS) initial = MAX_CELLS;
+  const nwords = Math.floor((w * h + 63) / 64);
+  const bits = new Array(nwords).fill(0n);
+  const cells = [];
+  const cx = Math.floor(w / 2), cy = Math.floor(h / 2);
+  let len = 0;
+  for (let i = 0; i < initial && cx - i >= 0; i++) {
+    const cell = cy * w + (cx - i);
+    cells[len++] = cell;
+    bits[cell >> 6] |= 1n << BigInt(cell & 63);
+  }
+  if (len === 0) { const cell = cy * w; cells.push(cell); bits[cell >> 6] |= 1n << BigInt(cell & 63); len = 1; }
+  const st = new State(w, h, cells, bits, nwords);
+  st.len = len; st.root_len = len; st.path_len = len; st.plen = 0;
+  st.food = -1;
+  const p = new Params(cfg);
+  let game_rng = splitmix64(BigInt(gameSeed) & 0xFFFFFFFFFFFFFFFFn);
+  const seedObj = [game_rng];
+  st.food = randomFreeCell(st, seedObj);
+  game_rng = seedObj[0];
+  let tick = 0, foods = 0, maxlen = st.len, dead = 0, filled = 0;
+  const node_mode = cfg.searchNodes > 0;
+  const moves = [];
+  const foodTrace = [];
+  const lenTrace = [st.len];
+  const bodies = [];
+  while (tick < maxTicks) {
+    tick++;
+    const grow = (st.food === headCell(st));
+    st.root_len = st.len; st.path_len = st.len; st.plen = 0;
+    rngState = splitmix64((BigInt(gameSeed) & 0xFFFFFFFFn) ^ ((BigInt(tick) & 0xFFFFFFFFn) << 32n) ^ 0x9E3779B97F4A7C15n);
+    const b = new Budget(node_mode, cfg.searchNodes, nowSec() + cfg.timeBudget);
+    let budget = cfg.timeBudget;
+    if (!node_mode) {
+      const rampStart = cfg.rampStart;
+      const region = 1.0 - rampStart;
+      const f = st.len / (w * h);
+      if (f <= region) {
+        const t = region > 0.0 ? f / region : 0.0;
+        budget = cfg.timeBudgetMax - (cfg.timeBudgetMax - cfg.timeBudget) * t;
+      } else if (f >= rampStart) {
+        const t = (f - rampStart) / (1.0 - rampStart);
+        budget = cfg.timeBudget + (cfg.timeBudgetMax - cfg.timeBudget) * t;
+      }
+    }
+    b.deadline = nowSec() + budget;
+    const outDepth = [0];
+    const move = chooseMoveImpl(st, grow ? 1 : 0, p, b, outDepth);
+    foodTrace.push(st.food);
+    lenTrace.push(st.len);
+    bodies.push(cells.slice());
+    if (move < 0) { dead = 1; break; }
+    moves.push({ x: move % w, y: Math.floor(move / w) });
+    if (grow) {
+      if (st.len >= MAX_CELLS) break;
+      for (let i = st.len; i > 0; i--) cells[i] = cells[i - 1];
+      cells[0] = move;
+      bits[move >> 6] |= 1n << BigInt(move & 63);
+      st.len += 1;
+      foods++;
+      seedObj[0] = game_rng;
+      const nf = randomFreeCell(st, seedObj);
+      game_rng = seedObj[0];
+      st.food = nf;
+    } else {
+      const tail = cells[st.len - 1];
+      bits[tail >> 6] &= ~(1n << BigInt(tail & 63));
+      bits[move >> 6] |= 1n << BigInt(move & 63);
+      for (let i = st.len - 1; i > 0; i--) cells[i] = cells[i - 1];
+      cells[0] = move;
+    }
+    if (st.len > maxlen) maxlen = st.len;
+    if (st.len >= w * h) { dead = 1; filled = 1; break; }
+    if (st.len >= MAX_CELLS) break;
+  }
+  return { width: w, height: h, seed: gameSeed,
+           summary: { ticks: tick, foods, length: st.len, maxlen, dead, filled },
+           moves, foodTrace, lenTrace, bodies };
+}
+
 export function loadMirror() {
   return { version: 1, chooseMove, playGame };
 }
