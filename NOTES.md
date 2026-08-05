@@ -24,12 +24,31 @@ snake_choose_move(cfg*, snake*, len, food, grow, seed:i64, decision, node_budget
                   time_budget:f64, out_x*, out_y*, out_depth*) -> i32
 snake_play_game(cfg*, seed:i64, max_ticks, result*) -> i32
 
+## Python (ctypes)
+- src/harness_snake/native.py dlopens build/libsnakecore.so (the same object the JS
+  backends use); SnakeGameConfig/SnakeGameResult use ctypes.Structure matching the 96B/24B
+  layouts. snake_choose_move/snake_play_game bound; build_config mirrors core.h incl. 4B pad.
+- src/harness_snake/__init__.py swaps the old snake_native C-extension import for the ctypes
+  loader (falls back to pure-Python expectimax when build/ absent).
+- Fixed a latent pure-Python bug in _apply_move: `set(snake) - (tail_tuple)` ->
+  `set(snake) - set(tail_tuple)` (set-tuple subtraction raised TypeError when the
+  accelerator was unavailable).
+- Viewer import fixed: `from snake import ...` -> `from . import ...`.
+- Added minimal pyproject.toml (src layout, snake-view = harness_snake.viewer:main).
+
+## nano-harness repoint (271 tests green)
+- nano-harness/snake.py is now a thin re-export shim over harness_snake; the old
+  snake.py/snake_viewer.py/snake_native.c/.so were deleted; setup.py slimmed to
+  py_modules=["snake"]; pyproject snake-view script removed (harness-snake provides it).
+- Installed harness-snake editable into the nano-harness venv; full suite:
+  271 passed, 3 subtests. snake-view --one runs the C core (search 101/100ms).
+
 ## TODO
 - [x] smoke-test js/wasm.mjs vs real wasm
 - [x] Node native backend (js/node-native.mjs) via node:ffi on Node 26
-- [ ] pure-JS mirror fallback (js/mirror.mjs)
-- [ ] unified JS facade (js/index.mjs): bun-native -> node-native -> wasm -> mirror
-- [ ] Python ctypes adapter in src/harness_snake
-- [ ] repoint nano-harness at the package; drop old snake.py etc; keep 271 tests green
+- [x] pure-JS mirror fallback (js/mirror.mjs)
+- [x] unified JS facade (js/index.mjs): bun-native -> node-native -> wasm -> mirror
+- [x] Python ctypes adapter in src/harness_snake
+- [x] repoint nano-harness at the package; drop old snake.py etc; keep 271 tests green
 - [ ] cross-language parity harness (native/wasm/mirror/ctypes/pure-python)
 - [ ] snake-view console tool + browser demo page (wasm parameter search)

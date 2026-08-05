@@ -9,12 +9,15 @@ from random import Random
 from time import monotonic
 from typing import Iterator
 
-# Optional machine-code search accelerator (snake_native C extension).
-# When the extension isn't built/importable we fall back to the pure
-# Python expectimax; everything below works either way.
+# Optional machine-code search accelerator: the compiled snakecore C library
+# (build/libsnakecore.so) loaded through ctypes -- the same C engine the JS
+# WASM/native backends use. When the library isn't present/loadable we fall
+# back to the pure-Python expectimax; everything below works either way.
 try:
-    import snake_native as _native
-except Exception:  # pragma: no cover - extension not built
+    from .native import native_available, load_native
+
+    _native = load_native() if native_available() else None
+except Exception:  # pragma: no cover - library not built
     _native = None
 
 # A search state's identity: the snake body plus the food cell (or None if
@@ -237,7 +240,7 @@ class SnakeGame:
     ) -> tuple[tuple[tuple[int, int], ...], tuple[int, int] | None] | None:
         """Return the (snake, food) state after ``move``, or None on death. The tail vacates its cell this tick unless the move eats food (then the snake grows).  Colliding with the remaining body is death."""
         grow = move == food
-        body = set(snake) - (snake[-1:] if not grow else ())
+        body = set(snake) - set(snake[-1:] if not grow else ())
         if move in body:
             return None
         new_snake = (move,) + snake

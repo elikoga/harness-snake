@@ -10,11 +10,7 @@ import sys
 import time
 from dataclasses import dataclass
 
-from snake import (
-    GameConfig,
-    SnakeGame,
-    default_game_log,
-)
+from . import GameConfig, SnakeGame, default_game_log
 
 RESET = "\x1b[0m"
 DIM = "\x1b[2m"
