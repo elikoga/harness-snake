@@ -606,3 +606,7 @@ class SnakeGame:
             f"SnakeGame({self.cols}x{self.lines} "
             f"len={len(self.snake)} dead={self.dead_flag} won={self.won})"
         )
+
+
+# Reusable animated CLI-footer widget (engine + animation-thread orchestration).
+from .footer import SnakeFooter
