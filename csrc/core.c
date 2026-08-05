@@ -21,6 +21,11 @@
 #define SEARCH_DEPTH_MAX 512
 #define SEARCH_DEPTH_FACTOR 4
 #define FOOD_SAMPLES_MAX 64
+/* Tail-reachability reward (must mirror the Python/JS heuristic constants).
+   The tiny reachable bonus stays under the +width*height slack of the
+   optimistic pruning ceiling so branch-and-bound remains exact. */
+#define TAIL_REACH_BONUS 5.0
+#define TAIL_REACH_PENALTY -100000.0
 
 /* ---- deterministic PRNG (xorshift64*), seeded per decision ---- */
 SNAKE_STATIC uint64_t rng_state;
@@ -128,9 +133,49 @@ SNAKE_STATIC int budget_ok(Budget* b) {
     return now_sec() < b->deadline;
 }
 
+SNAKE_STATIC int can_reach_tail(const State* s) {
+    int head = head_cell(s), tail = tail_cell(s);
+    if (head == tail) return 1;
+    int total = s->w * s->h;
+    /* Scratch (single-threaded game); grown on demand, exactly like sample_free. */
+    static char* seen = NULL;
+    static int seen_cap = 0;
+    if (seen_cap < total) {
+        char* np = (char*)realloc(seen, (size_t)total);
+        if (!np) { seen_cap = 0; return 1; } /* on alloc failure, assume safe */
+        seen = np; seen_cap = total;
+    }
+    memset(seen, 0, (size_t)total);
+    static int* queue = NULL;
+    static int queue_cap = 0;
+    if (queue_cap < total) {
+        int* nq = (int*)realloc(queue, (size_t)total * sizeof(int));
+        if (!nq) { queue_cap = 0; return 1; }
+        queue = nq; queue_cap = total;
+    }
+    int q0 = 0, q1 = 0;
+    queue[q1++] = head; seen[head] = 1;
+    while (q0 < q1) {
+        int c = queue[q0++];
+        int nb[4], n = neighbours(s, c, nb);
+        for (int i = 0; i < n; i++) {
+            int m = nb[i];
+            if (m == tail) return 1;          /* reached the vacating tail */
+            if (!occ(s, m) && !seen[m]) {     /* only body blocks the way */
+                seen[m] = 1; queue[q1++] = m;
+            }
+        }
+    }
+    return 0;
+}
+
 SNAKE_STATIC double heuristic(const State* s, double manhattan_w) {
-    if (s->food < 0) return 0.0;
-    return -(double)manhattan(s, head_cell(s), s->food) * manhattan_w;
+    double value = 0.0;
+    if (s->food >= 0)
+        value -= (double)manhattan(s, head_cell(s), s->food) * manhattan_w;
+    if (can_reach_tail(s)) value += TAIL_REACH_BONUS;
+    else value += TAIL_REACH_PENALTY;
+    return value;
 }
 
 typedef struct {

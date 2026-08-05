@@ -11,6 +11,9 @@
 const SEARCH_DEPTH_MAX = 512;
 const SEARCH_DEPTH_FACTOR = 4;
 const FOOD_SAMPLES_MAX = 64;
+// Tail-reachability reward (must mirror the C/Python heuristic constants).
+const TAIL_REACH_BONUS = 5.0;
+const TAIL_REACH_PENALTY = -100000.0;
 const MAX_CELLS = 1048576;
 
 // ---- deterministic PRNG (mirrors core.c) ----
@@ -138,9 +141,33 @@ class Budget {
   }
 }
 
+function canReachTail(s) {
+  const head = headCell(s), tail = tailCell(s);
+  if (head === tail) return true;
+  const total = s.w * s.h;
+  const seen = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let q0 = 0, q1 = 0;
+  queue[q1++] = head; seen[head] = 1;
+  while (q0 < q1) {
+    const c = queue[q0++];
+    const nb = new Array(4).fill(0);
+    const n = neighbours(s, c, nb);
+    for (let i = 0; i < n; i++) {
+      const m = nb[i];
+      if (m === tail) return true;        // reached the vacating tail
+      if (!occ(s, m) && !seen[m]) { seen[m] = 1; queue[q1++] = m; }
+    }
+  }
+  return false;
+}
+
 function heuristic(s, manhattanW) {
-  if (s.food < 0) return 0.0;
-  return -(manhattan(s, headCell(s), s.food)) * manhattanW;
+  let value = 0.0;
+  if (s.food >= 0) value -= manhattan(s, headCell(s), s.food) * manhattanW;
+  if (canReachTail(s)) value += TAIL_REACH_BONUS;
+  else value += TAIL_REACH_PENALTY;
+  return value;
 }
 
 class Params {

@@ -43,6 +43,14 @@ DEATH_REWARD = -1_000_000.0  # winning the field only beats this (see WIN_REWARD
 # Filling the board is a real win: above any food-only death, below a full one.
 WIN_REWARD = 1_000_000.0
 MANHATTAN_WEIGHT = 25.0  # greedy bias: Manhattan distance to the food
+# Tail-reachability reward: a snake whose head can no longer reach its own
+# tail is boxed in (doomed -- it can never escape an ever-tightening loop),
+# so those leaf states are penalised hard to keep an escape path open.  A
+# reachable tail is lightly rewarded (always a way home).  The reachable
+# bonus is tiny so it fits under the +width*height slack of the optimistic
+# upper-bound ceiling used for branch-and-bound pruning.
+TAIL_REACH_BONUS = 5.0
+TAIL_REACH_PENALTY = -100_000.0
 STEP_REWARD = 5.0  # small reward per step advanced: gently encourages staying alive
 TURN_REWARD = -300.0  # penalty for turning: favors straight lines, never dying
 # Production: wall-clock per-decision deadline; tests: fixed node count.
@@ -256,13 +264,48 @@ class SnakeGame:
             if (x, y) not in snake
         ]
 
+    def _can_reach_tail(self, snake: tuple[tuple[int, int], ...]) -> bool:
+        """True if the head can still reach the tail through free cells -- the
+        classic "safe" check.  A snake that can touch its own tail always has a
+        path out of any trap, so boxed-in states (head cut off from its tail)
+        are almost certainly fatal and the heuristic penalises them.  BFS from
+        the head; passable cells are those not occupied by the body, and
+        arriving on the (currently-vacating) tail counts as reachable.  The
+        boolean is order-independent, so the search stays deterministic."""
+        head, tail = snake[0], snake[-1]
+        if head == tail:
+            return True
+        body = set(snake)
+        seen = {(head[0], head[1])}
+        queue = [head]
+        while queue:
+            cell = queue.pop(0)
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nxt = (cell[0] + dx, cell[1] + dy)
+                if nxt == tail:
+                    return True
+                if (
+                    0 <= nxt[0] < self.width
+                    and 0 <= nxt[1] < self.height
+                    and nxt not in body
+                    and nxt not in seen
+                ):
+                    seen.add(nxt)
+                    queue.append(nxt)
+        return False
+
     def _heuristic(
         self, snake: tuple[tuple[int, int], ...], food: tuple[int, int] | None
     ) -> float:
         """Leaf value: Manhattan distance to food (closer is better). Gives the search directional purpose even below the food-reaching depth, so the snake plans toward food and turns less."""
-        if not food:
-            return 0.0
-        return -(self._manhattan(snake[0], food) * MANHATTAN_WEIGHT)
+        value = 0.0
+        if food:
+            value -= self._manhattan(snake[0], food) * MANHATTAN_WEIGHT
+        if self._can_reach_tail(snake):
+            value += TAIL_REACH_BONUS
+        else:
+            value += TAIL_REACH_PENALTY
+        return value
 
     def _upper_bound(self, depth: int) -> float:
         """Optimistic value ceiling for branch-and-bound pruning. Even a perfect subtree can never exceed eating food on every remaining ply plus the best possible heuristic leaf (the whole board is reachable, worth at most its cell count)."""
